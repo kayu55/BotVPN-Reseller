@@ -1,0 +1,1196 @@
+openapi: 3.0.3
+info:
+  title: BotVPN Reseller API
+  version: 1.0.0
+  description: |
+    REST API for BotVPN Resellers to programmatically manage VPN accounts.
+    
+    **Base URL:** `https://api.rajaserver.web.id/api/v1`
+    
+    **Local:** `http://127.0.0.1:8788/api/v1`
+    
+    All endpoints (except `/health`) require Bearer token authentication.
+  contact:
+    name: PT RAJA SERVER PREMIUM
+    url: https://t.me/ARI_VPN_STORE
+servers:
+  - url: https://api.rajaserver.web.id/api/v1
+    description: Production (via Cloudflare Tunnel)
+  - url: http://127.0.0.1:8788/api/v1
+    description: Local development
+
+security:
+  - BearerAuth: []
+
+paths:
+  /health:
+    get:
+      summary: Health check endpoint
+      description: Public endpoint to check API availability
+      operationId: healthCheck
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /me:
+    get:
+      summary: Get current reseller identity
+      description: Returns the Telegram ID of the authenticated reseller
+      operationId: getMe
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MeResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '403':
+          $ref: '#/components/responses/AccountSuspended'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  /balance:
+    get:
+      summary: Get reseller balance
+      description: Returns the current balance from the existing BotVPN balance system
+      operationId: getBalance
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BalanceResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '403':
+          $ref: '#/components/responses/AccountSuspended'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  /products:
+    get:
+      summary: List available products
+      description: Returns list of VPN products from BotVPN
+      operationId: getProducts
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductsResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '403':
+          $ref: '#/components/responses/AccountSuspended'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  /servers:
+    get:
+      summary: List available servers
+      description: Returns VPN servers filtered by reseller access
+      operationId: getServers
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ServersResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '403':
+          $ref: '#/components/responses/AccountSuspended'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  /accounts:
+    post:
+      summary: Create new VPN account
+      description: |
+        Creates a new VPN account using existing BotVPN logic.
+        Price is deducted from reseller's existing balance.
+        
+        **Pricing:** `server.harga * duration` (resellers get 50% discount except VPN Edu Direct & CloudFront)
+      operationId: createAccount
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAccountRequest'
+      responses:
+        '200':
+          description: Account created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateAccountResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '402':
+          $ref: '#/components/responses/InsufficientBalance'
+        '403':
+          $ref: '#/components/responses/AccountSuspended'
+        '404':
+          $ref: '#/components/responses/ServerNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  /accounts/{username}/renew:
+    post:
+      summary: Renew existing VPN account
+      description: |
+        Renews an existing VPN account. Price deducted from balance.
+      operationId: renewAccount
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Username'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenewAccountRequest'
+      responses:
+        '200':
+          description: Account renewed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RenewAccountResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '402':
+          $ref: '#/components/responses/InsufficientBalance'
+        '403':
+          $ref: '#/components/responses/AccountSuspended'
+        '404':
+          $ref: '#/components/responses/ServerNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  /accounts/{username}:
+    get:
+      summary: Get account details
+      description: Returns details of a specific account owned by the reseller
+      operationId: getAccount
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/Username'
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccountDetailResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '403':
+          $ref: '#/components/responses/AccountSuspended'
+        '404':
+          $ref: '#/components/responses/AccountNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  /operations:
+    post:
+      summary: Run a panel operation
+      description: |
+        Menjalankan operasi panel selain create/renew.
+        - `create` & `renew` otomatis dipotong dari saldo reseller (harga reseller).
+        - `delete`, `lock`, `unlock`, `changelimip`, `trial`, `fix` dijalankan di panel.
+        - `cek` memeriksa keberadaan akun di server.
+      operationId: runOperation
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OperationRequest'
+      responses:
+        '200':
+          description: Operasi berhasil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationResponse'
+        '400':
+          $ref: '#/components/responses/InvalidRequest'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '402':
+          $ref: '#/components/responses/InsufficientBalance'
+        '403':
+          $ref: '#/components/responses/AccountSuspended'
+        '404':
+          $ref: '#/components/responses/ServerNotFound'
+        '429':
+          $ref: '#/components/responses/RateLimitExceeded'
+
+  /edu/products:
+    get:
+      summary: List VPN EDU Direct products (Naytra)
+      operationId: getEduProducts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /edu/accounts:
+    get:
+      summary: List VPN EDU Direct accounts (Naytra)
+      operationId: getEduAccounts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /edu/renewable:
+    get:
+      summary: List VPN EDU Direct renewable accounts (Naytra)
+      operationId: getEduRenewable
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /edu/trial:
+    post:
+      summary: Order VPN EDU Direct trial (Naytra)
+      operationId: eduTrial
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                server_code:
+                  type: string
+                service:
+                  type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /edu/order:
+    post:
+      summary: Order VPN EDU Direct account (Naytra)
+      description: |
+        Order + verifikasi ke panel. Jika respons order ambigu tetapi akun
+        sudah dibuat, akun dipulihkan otomatis (`recovered: true`) tanpa refund.
+      operationId: eduOrder
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                server_code:
+                  type: string
+                service:
+                  type: string
+                billing_period:
+                  type: string
+                duration:
+                  type: integer
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /edu/renew:
+    post:
+      summary: Renew VPN EDU Direct account (Naytra)
+      operationId: eduRenew
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                order_id:
+                  type: string
+                duration:
+                  type: integer
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /vpncf/servers:
+    get:
+      summary: List VPN CloudFront (API) servers (NadiaVPN)
+      operationId: getVpncfServers
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: force
+          in: query
+          required: false
+          schema:
+            type: integer
+            enum: [0, 1]
+          description: Set 1 untuk melewati cache
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /vpncf/accounts:
+    get:
+      summary: List VPN CloudFront accounts (NadiaVPN)
+      operationId: getVpncfAccounts
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /vpncf/account/details:
+    post:
+      summary: Get VPN CloudFront account details (NadiaVPN)
+      operationId: vpncfAccountDetails
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account_id]
+              properties:
+                account_id:
+                  type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /vpncf/account/sync:
+    post:
+      summary: Sync VPN CloudFront account (NadiaVPN)
+      operationId: vpncfAccountSync
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account_id]
+              properties:
+                account_id:
+                  type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /vpncf/create:
+    post:
+      summary: Order VPN CloudFront account (NadiaVPN)
+      description: Order + verifikasi panel (recovery otomatis bila respons ambigu).
+      operationId: vpncfCreate
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [server_id, protocol, username, duration, type]
+              properties:
+                server_id:
+                  type: integer
+                protocol:
+                  type: string
+                username:
+                  type: string
+                password:
+                  type: string
+                duration:
+                  type: integer
+                type:
+                  type: string
+                  enum: [day, week, month]
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /vpncf/trial:
+    post:
+      summary: Order VPN CloudFront trial (NadiaVPN)
+      operationId: vpncfTrial
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [server_id, protocol]
+              properties:
+                server_id:
+                  type: integer
+                protocol:
+                  type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /vpncf/renew:
+    post:
+      summary: Renew VPN CloudFront account (NadiaVPN)
+      operationId: vpncfRenew
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account_id, duration, type]
+              properties:
+                account_id:
+                  type: string
+                duration:
+                  type: integer
+                type:
+                  type: string
+                  enum: [day, week, month]
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /vpncf/migrate:
+    post:
+      summary: Migrate VPN CloudFront account (NadiaVPN)
+      operationId: vpncfMigrate
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account_id, new_server_id]
+              properties:
+                account_id:
+                  type: string
+                new_server_id:
+                  type: integer
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+  /vpncf/delete:
+    post:
+      summary: Delete VPN CloudFront account (NadiaVPN)
+      operationId: vpncfDelete
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [account_id]
+              properties:
+                account_id:
+                  type: string
+      responses:
+        '200':
+          description: Success
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UpstreamResponse'
+        '401':
+          $ref: '#/components/responses/InvalidApiKey'
+        '502':
+          $ref: '#/components/responses/UpstreamError'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: API Key
+      description: |
+        Format: `Authorization: Bearer rsl_xxxxxxxxxxxxxxxxxxxxxxxxx`
+        
+        API Key is generated via Telegram bot admin command:
+        `/apikey create <telegram_id>`
+
+  parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      description: |
+        Optional unique key for idempotent requests (create/renew).
+        If provided, duplicate requests with same key return cached result.
+      schema:
+        type: string
+        format: uuid
+        example: "order-123456"
+    Username:
+      name: username
+      in: path
+      required: true
+      description: Account username
+      schema:
+        type: string
+        example: "abc123"
+
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        status:
+          type: string
+          example: "ok"
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        code:
+          type: string
+          example: "ERROR_CODE"
+        message:
+          type: string
+          example: "Human readable error message"
+
+    OperationRequest:
+      type: object
+      required:
+        - action
+        - protocol
+        - server_id
+      properties:
+        action:
+          type: string
+          enum: [create, renew, delete, lock, unlock, changelimip, trial, fix, cek]
+          example: "delete"
+        protocol:
+          type: string
+          enum: [ssh, vmess, vless, trojan, sshcf, vmesscf, vlesscf, trojancf]
+          example: "ssh"
+        server_id:
+          type: integer
+          example: 1
+        username:
+          type: string
+          example: "abc123"
+        password:
+          type: string
+          example: "pass123"
+        duration:
+          type: integer
+          description: Dipakai oleh action create/renew/fix
+          example: 30
+        quota:
+          type: string
+          example: "0"
+        iplimit:
+          type: integer
+          example: 2
+        target_ip:
+          type: integer
+          description: Dipakai oleh action changelimip
+          example: 2
+        cf_domain:
+          type: string
+          description: Override domain CloudFront (opsional)
+
+    OperationResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            success:
+              type: boolean
+              example: true
+            message:
+              type: string
+              example: "✅ *Delete SSH Account Success!*..."
+            username:
+              type: string
+            protocol:
+              type: string
+            expired:
+              type: string
+              nullable: true
+            quota:
+              type: string
+              nullable: true
+            iplimit:
+              type: integer
+              nullable: true
+            raw:
+              type: object
+              nullable: true
+
+    UpstreamResponse:
+      type: object
+      description: Respons generik yang membungkus data dari panel upstream (EDU/CloudFront)
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          description: Data mentah dari panel upstream
+          nullable: true
+
+    MeResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            telegram_id:
+              type: integer
+              example: 123456789
+            status:
+              type: string
+              example: "active"
+
+    BalanceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            balance:
+              type: integer
+              example: 50000
+            currency:
+              type: string
+              example: "IDR"
+
+    ProductsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                example: "ssh"
+              name:
+                type: string
+                example: "SSH"
+
+    ServersResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Server'
+
+    Server:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: "ID BiznetVIP1"
+        nama_server:
+          type: string
+          example: "ID BiznetVIP1"
+        location:
+          type: string
+          example: "ID"
+        domain:
+          type: string
+          example: "id-biznetvip1.rajaserver.web.id"
+        cloudfront_domain:
+          type: string
+          nullable: true
+          example: "cf-id-biznetvip1.rajaserver.web.id"
+        quota:
+          type: integer
+          example: 100
+        iplimit:
+          type: integer
+          example: 2
+        price_per_day:
+          type: integer
+          example: 2000
+        harga:
+          type: integer
+          description: Harga per hari (raw), sama dengan price_per_day
+          example: 2000
+        batas_create_akun:
+          type: integer
+          description: Kapasitas maksimum akun pada server
+          example: 100
+        total_create_akun:
+          type: integer
+          description: Jumlah akun terpakai saat ini
+          example: 37
+        status:
+          type: string
+          enum: [online, full]
+          example: "online"
+        is_reseller_only:
+          type: boolean
+          example: false
+
+    CreateAccountRequest:
+      type: object
+      required:
+        - protocol
+        - server_id
+        - duration
+      properties:
+        protocol:
+          type: string
+          enum: [ssh, vmess, vless, trojan, sshcf, vmesscf, vlesscf, trojancf]
+          example: "ssh"
+        server_id:
+          type: integer
+          example: 1
+        duration:
+          type: integer
+          minimum: 1
+          maximum: 365
+          example: 30
+        username:
+          type: string
+          pattern: '^[a-z0-9-]+$'
+          minLength: 3
+          maxLength: 20
+          example: "myuser123"
+        password:
+          type: string
+          minLength: 3
+          maxLength: 20
+          example: "pass123"
+        quota:
+          type: string
+          example: "0"
+        iplimit:
+          type: integer
+          minimum: 1
+          maximum: 100
+          example: 2
+
+    CreateAccountResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            username:
+              type: string
+              example: "abc123"
+            password:
+              type: string
+              example: "pass123"
+            protocol:
+              type: string
+              example: "ssh"
+            server:
+              type: string
+              example: "ID BiznetVIP1"
+            server_id:
+              type: integer
+              example: 1
+            duration:
+              type: integer
+              example: 30
+            expired_at:
+              type: string
+              format: date-time
+              example: "2026-10-28T23:59:59+07:00"
+            price:
+              type: integer
+              example: 6000
+            balance:
+              type: integer
+              example: 44000
+            message:
+              type: string
+              example: "✅ *SSH Account Created Successfully!*..."
+
+    RenewAccountRequest:
+      type: object
+      required:
+        - protocol
+        - server_id
+        - duration
+      properties:
+        protocol:
+          type: string
+          enum: [ssh, vmess, vless, trojan, sshcf, vmesscf, vlesscf, trojancf]
+          example: "ssh"
+        server_id:
+          type: integer
+          example: 1
+        duration:
+          type: integer
+          minimum: 1
+          maximum: 365
+          example: 30
+
+    RenewAccountResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            username:
+              type: string
+              example: "abc123"
+            protocol:
+              type: string
+              example: "ssh"
+            server:
+              type: string
+              example: "ID BiznetVIP1"
+            duration:
+              type: integer
+              example: 30
+            expired_at:
+              type: string
+              format: date-time
+              example: "2026-11-27T23:59:59+07:00"
+            price:
+              type: integer
+              example: 6000
+            balance:
+              type: integer
+              example: 38000
+            message:
+              type: string
+              example: "✅ *Renew SSH Account Success!*..."
+
+    AccountDetailResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          properties:
+            username:
+              type: string
+              example: "abc123"
+            protocol:
+              type: string
+              example: "ssh"
+            server:
+              type: string
+              example: "ID BiznetVIP1"
+            status:
+              type: string
+              enum: [active, expired]
+              example: "active"
+            expired_at:
+              type: string
+              format: date-time
+              example: "2026-10-28T23:59:59+07:00"
+            created_at:
+              type: string
+              format: date-time
+              example: "2026-09-28T10:00:00+07:00"
+            price:
+              type: integer
+              example: 6000
+
+  responses:
+    InvalidApiKey:
+      description: Invalid or missing API key
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: "INVALID_API_KEY"
+            message: "API key tidak valid"
+    AccountSuspended:
+      description: Reseller account suspended
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: "ACCOUNT_SUSPENDED"
+            message: "Akun reseller tidak aktif"
+    InsufficientBalance:
+      description: Insufficient balance
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: "INSUFFICIENT_BALANCE"
+            message: "Saldo tidak cukup. Butuh Rp6000, saldo Rp5000"
+    InvalidRequest:
+      description: Invalid request body
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: "INVALID_REQUEST"
+            message: "protocol, server_id, and duration are required"
+    ServerNotFound:
+      description: Server not found
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: "SERVER_NOT_FOUND"
+            message: "Server tidak ditemukan"
+    AccountNotFound:
+      description: Account not found or not owned
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: "ACCOUNT_NOT_FOUND"
+            message: "Akun tidak ditemukan atau bukan milik Anda"
+    RateLimitExceeded:
+      description: Rate limit exceeded
+      headers:
+        X-RateLimit-Limit:
+          schema:
+            type: integer
+        X-RateLimit-Remaining:
+          schema:
+            type: integer
+        X-RateLimit-Reset:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: "RATE_LIMIT_EXCEEDED"
+            message: "Too many requests"
+    UpstreamError:
+      description: Error dari panel upstream (EDU / CloudFront)
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            code: "UPSTREAM_ERROR"
+            message: "Terjadi kesalahan saat menghubungi server. Silakan coba lagi."
