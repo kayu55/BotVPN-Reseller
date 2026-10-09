@@ -1,0 +1,33 @@
+{
+  "name": "botvpn-reseller",
+  "version": "2.0.0",
+  "description": "BotVPN Reseller - Bot Telegram reseller (menu sama seperti BotVPN, server diambil dari API BotVPN)",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "node app.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.7",
+    "express": "^4.21.0",
+    "sharp": "^0.35.3",
+    "sqlite3": "^5.1.7",
+    "telegraf": "^4.16.3",
+    "winston": "^3.17.0"
+  },
+  "allowScripts": {
+    "sqlite3": true,
+    "sharp": true
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "telegram",
+    "bot",
+    "vpn",
+    "reseller"
+  ],
+  "author": "",
+  "license": "MIT"
+}

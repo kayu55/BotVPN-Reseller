@@ -1,0 +1,255 @@
+#!/usr/bin/env bash
+# BotVPN-Reseller Installer
+#
+# Cara pakai:
+#   bash start              # pasang ulang / update
+#   bash start install      # sama seperti di atas
+#   bash start update       # update kode saja (git pull + npm install + restart)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/arivpnstores/BotVPN-Reseller/main/start)
+
+REPO_URL="https://github.com/kayu55/BotVPN-Reseller.git"
+APP_DIR="/root/BotVPN-Reseller"
+
+# Kalau dijalankan sebagai user non-root, pakai sudo untuk perintah root.
+if [ "$(id -u)" -eq 0 ]; then
+  SUDO=""
+else
+  SUDO="sudo"
+fi
+
+# Colors
+green="\e[38;5;82m"
+red="\e[38;5;196m"
+neutral="\e[0m"
+orange="\e[38;5;130m"
+blue="\e[38;5;39m"
+yellow="\e[38;5;226m"
+bold_white="\e[1;37m"
+reset="\e[0m"
+
+die() {
+  echo -e "${red}[ERROR] $1${reset}"
+  exit 1
+}
+
+print_header() {
+  clear
+  echo -e "${orange}─────────────────────────────────────────${reset}"
+  echo -e "   ${green}.:::. BOTVPN RESELLER INSTALLER .:::.   ${reset}"
+  echo -e "${orange}─────────────────────────────────────────${reset}"
+}
+
+install_deps() {
+  echo -e "${blue}[1/5] Installing dependencies...${reset}"
+  timedatectl set-timezone Asia/Jakarta 2>/dev/null || true
+
+  $SUDO apt-get update -qq || die "apt-get update gagal. Pastikan OS Debian/Ubuntu."
+
+  # git/curl + toolchain wajib untuk native module (sqlite3, sharp).
+  if ! command -v git >/dev/null 2>&1 || ! command -v curl >/dev/null 2>&1 \
+     || ! command -v g++ >/dev/null 2>&1 || ! command -v python3 >/dev/null 2>&1; then
+    $SUDO apt-get install -y git curl ca-certificates build-essential python3 \
+      || die "Install dependency sistem gagal."
+  fi
+
+  # Node.js 20 (LTS). sqlite3 5.1.7 hanya punya prebuilt binary sampai Node 20/21;
+  # di Node 22 (ABI 127) binding-nya tidak ditemukan dan harus compile dari source.
+  NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+  if [ "$NODE_MAJOR" -ne 20 ]; then
+    echo -e "${blue}Mengpasang Node.js 20 (LTS)...${reset}"
+    curl -fsSL https://deb.nodesource.com/setup_20.x | ${SUDO:+$SUDO -E} bash - || die "Download setup Node.js gagal."
+    $SUDO apt-get install -y nodejs || die "Install Node.js gagal."
+  else
+    echo -e "${green}Node.js 20 sudah terpasang, skip...${reset}"
+  fi
+
+  $SUDO npm install -g npm@latest >/dev/null 2>&1 || true
+
+  if ! command -v pm2 >/dev/null 2>&1; then
+    $SUDO npm install -g pm2 || die "Install PM2 gagal."
+  fi
+}
+
+clone_repo() {
+  if [ -d "$APP_DIR/.git" ]; then
+    echo -e "${blue}Mengupdate kode dari repository...${reset}"
+    cd "$APP_DIR" || die "Gagal masuk ke $APP_DIR"
+    git pull --ff-only || $SUDO git pull --ff-only || die "git pull gagal. Selesaikan konflik manual."
+  else
+    echo -e "${blue}Meng-clone repository...${reset}"
+    $SUDO rm -rf "$APP_DIR"
+    $SUDO git clone --depth 1 "$REPO_URL" "$APP_DIR" || die "Clone repository gagal."
+  fi
+  $SUDO chown -R "$(id -u):$(id -g)" "$APP_DIR" 2>/dev/null || true
+}
+
+install_npm() {
+  cd "$APP_DIR" || die "Gagal masuk ke $APP_DIR"
+  npm install --no-audit --no-fund || die "npm install gagal."
+  mkdir -p logs
+
+  # sqlite3 punya binding native. Kalau prebuilt tidak cocok dengan versi Node,
+  # install script-nya (prebuild-install, fallback node-gyp) akan dijalankan ulang.
+  if ! node -e "require('sqlite3')" >/dev/null 2>&1; then
+    echo -e "${yellow}Binding sqlite3 tidak ditemukan, build ulang...${reset}"
+    npm rebuild sqlite3 || die "Build sqlite3 gagal."
+    node -e "require('sqlite3')" >/dev/null 2>&1 || die "Binding sqlite3 tetap gagal dimuat."
+  fi
+  echo -e "${green}Dependency siap.${reset}"
+}
+
+write_vars() {
+  VARS_FILE="$APP_DIR/.vars.json"
+
+  if [ -f "$VARS_FILE" ]; then
+    echo -e "${yellow}File .vars.json sudah ada. Konfigurasi lama dipertahankan.${reset}"
+    echo "Ketik 'y' untuk menulis ulang konfigurasi baru."
+    read -r rewrite
+    if [ "$rewrite" != "y" ] && [ "$rewrite" != "Y" ]; then
+      return 0
+    fi
+  fi
+
+  read -p "Masukkan token bot: " token
+  while [ -z "$token" ]; do
+    echo "Token tidak boleh kosong!"
+    read -p "Masukkan token bot: " token
+  done
+
+  read -p "Masukkan admin ID (Telegram ID): " adminid
+  while [ -z "$adminid" ]; do
+    echo "Admin ID tidak boleh kosong!"
+    read -p "Masukkan admin ID (Telegram ID): " adminid
+  done
+
+  read -p "Masukkan nama store: " namastore
+  [ -z "$namastore" ] && namastore="BOTVPN RESELLER"
+
+  read -p "Masukkan ID GROUP NOTIF (format -100..., kosong = tidak ada): " groupid
+
+  read -p "Masukkan API BASE URL [https://github.com/kayu55/api]: " apibase
+  [ -z "$apibase" ] && apibase="https://github.com/kayu55/api"
+
+  read -p "Masukkan API KEY (rsl_...): " apikey
+  while [ -z "$apikey" ]; do
+    echo "API Key tidak boleh kosong!"
+    read -p "Masukkan API KEY (rsl_...): " apikey
+  done
+
+  echo ""
+  echo "Pilih Payment Gateway:"
+  echo "1. SHOPEEPAY"
+  echo "2. GOPAY"
+  echo "3. ORKUT"
+  read -p "Masukkan pilihan (1/2/3): " pilihan
+  while [ "$pilihan" != "1" ] && [ "$pilihan" != "2" ] && [ "$pilihan" != "3" ]; do
+    echo "Pilihan tidak valid!"
+    read -p "Masukkan pilihan (1/2/3): " pilihan
+  done
+
+  payment="SHOPEEPAY"
+  gopaykey=""
+  dataqris=""
+  authuser=""
+  authtoken=""
+  shopeeurl="http://localhost:2007"
+
+  case "$pilihan" in
+    1)
+      payment="SHOPEEPAY"
+      read -p "Masukkan SHOPEEPAY_BASE_URL [http://localhost:2007]: " shopeeurl
+      [ -z "$shopeeurl" ] && shopeeurl="http://localhost:2007"
+      ;;
+    2)
+      payment="GOPAY"
+      read -p "Masukkan GOPAY_KEY: " gopaykey
+      ;;
+    3)
+      payment="ORKUT"
+      read -p "Masukkan DATA_QRIS_ORKUT: " dataqris
+      read -p "Masukkan AUTH_USERNAME_ORKUT: " authuser
+      read -p "Masukkan AUTH_TOKEN_ORKUT: " authtoken
+      ;;
+  esac
+
+  cat >"$VARS_FILE" <<EOF
+{
+  "BOT_TOKEN": "$token",
+  "USER_ID": "$adminid",
+  "NAMA_STORE": "$namastore",
+  "GROUP_ID": "$groupid",
+  "PORT": "6970",
+  "PAYMENT": "$payment",
+  "GOPAY_KEY": "$gopaykey",
+  "DATA_QRIS_ORKUT": "$dataqris",
+  "AUTH_USERNAME_ORKUT": "$authuser",
+  "AUTH_TOKEN_ORKUT": "$authtoken",
+  "SHOPEEPAY_BASE_URL": "$shopeeurl",
+  "API_BASE_URL": "$apibase",
+  "API_KEY": "$apikey",
+  "REQUIRED_CHANNEL": "@CHANNEL_ANDA",
+  "REQUIRED_GROUP": "@GROUP_ANDA",
+  "ADMIN_USERNAME": "Admin",
+  "CREATOR": "Admin",
+  "ENABLE_VPNCF": true
+}
+EOF
+
+  $SUDO chmod 600 "$VARS_FILE" 2>/dev/null || true
+  echo -e "${green}Konfigurasi .vars.json tersimpan.${reset}"
+}
+
+start_bot() {
+  echo -e "${blue}[5/5] Starting bot...${reset}"
+  cd "$APP_DIR" || die "Gagal masuk ke $APP_DIR"
+
+  if command -v pm2 >/dev/null 2>&1; then
+    pm2 delete botvpn-reseller >/dev/null 2>&1 || true
+    pm2 start ecosystem.config.js || die "PM2 gagal start bot."
+    pm2 save >/dev/null 2>&1 || true
+  else
+    $SUDO npm install -g pm2 || die "Install PM2 gagal."
+    pm2 start ecosystem.config.js || die "PM2 gagal start bot."
+    pm2 save >/dev/null 2>&1 || true
+  fi
+
+  echo -e "${green}BotVPN-Reseller berjalan!${reset}"
+  echo "Cek status : pm2 status"
+  echo "Lihat log  : pm2 logs botvpn-reseller"
+  if [ "$(id -u)" -ne 0 ]; then
+    echo ""
+    echo "Agar bot otomatis jalan saat server restart, jalankan:"
+    echo "  ${bold_white}sudo env PATH=\$PATH pm2 startup${reset}"
+  fi
+}
+
+do_update() {
+  print_header
+  install_deps
+  clone_repo
+  install_npm
+  start_bot
+}
+
+do_install() {
+  print_header
+  install_deps
+  clone_repo
+  install_npm
+  write_vars
+  start_bot
+}
+
+main() {
+  CMD="${1:-install}"
+  case "$CMD" in
+    install)   do_install ;;
+    update)    do_update ;;
+    *)
+      echo -e "${red}Usage: bash start [install|update]${reset}"
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"
