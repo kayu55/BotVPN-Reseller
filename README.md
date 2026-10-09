@@ -1,6 +1,6 @@
 # BotVPN-Reseller
 
-**Instalasi cepat:** `bash <(curl -fsSL https://github.com/arivpnstores/BotVPN-Reseller/raw/main/start)`
+**Instalasi cepat:** `bash <(curl -fsSL https://github.com/kayu55/BotVPN-Reseller/raw/main/start)`
 
 Bot Telegram **reseller** dengan menu & alur **sama seperti BotVPN**, bedanya:
 
@@ -72,7 +72,7 @@ Langkah di bot BotVPN:
    {
      "BOT_TOKEN": "TOKEN_BOT_RESELLER_DARI_BOTFATHER",
      "USER_ID": "TELEGRAM_ID_ADMIN",
-     "NAMA_STORE": "PT RAJA SERVER PREMIUM",
+     "NAMA_STORE": "ARYA BLITAR",
      "GROUP_ID": "-100xxxxxxxxxx",
      "PORT": "6969",
      "PAYMENT": "SHOPEEPAY",
